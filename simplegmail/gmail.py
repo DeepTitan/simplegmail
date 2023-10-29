@@ -69,9 +69,16 @@ class Gmail(object):
         access_type: str = 'offline',
         noauth_local_webserver: bool = False,
         _creds: Optional[client.OAuth2Credentials] = None,
+        custom_service = None
     ) -> None:
         self.client_secret_file = client_secret_file
         self.creds_file = creds_file
+
+        if custom_service:
+            self._service = custom_service
+            self.creds = custom_service._http.credentials
+            return
+
 
         try:
             # The file gmail_token.json stores the user's access and refresh
@@ -116,7 +123,7 @@ class Gmail(object):
     def service(self) -> 'googleapiclient.discovery.Resource':
         # Since the token is only used through calls to the service object,
         # this ensure that the token is always refreshed before use.
-        if self.creds.access_token_expired:
+        if self.creds.expired:
             self.creds.refresh(Http())
 
         return self._service
@@ -132,7 +139,8 @@ class Gmail(object):
         bcc: Optional[List[str]] = None,
         attachments: Optional[List[str]] = None,
         signature: bool = False,
-        user_id: str = 'me'
+        user_id: str = 'me',
+        return_raw_response: bool = False
     ) -> Message:
         """
         Sends an email.
@@ -170,7 +178,10 @@ class Gmail(object):
         try:
             req = self.service.users().messages().send(userId='me', body=msg)
             res = req.execute()
-            return self._build_message_from_ref(user_id, res, 'reference')
+            if return_raw_response:
+                return self._build_message_from_ref(user_id, res, 'reference'), res
+            else:
+                return self._build_message_from_ref(user_id, res, 'reference')
 
         except HttpError as error:
             # Pass along the error
